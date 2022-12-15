@@ -1,10 +1,10 @@
 high:
-    - policy_name: Third-party data category exposure
-      policy_description: Sending data in category to third party. Ensure data sent to third party is intended and secured.
+    - policy_name: Do not leak sensitive data to third-party loggers.
+      policy_display_id: CR-016
+      policy_description: 'Sensitive data should not be sent to third party logging libraries or services. This policy checks if sensitive data types are sent to third party loggers. Currently supports: Sentry. '
       line_number: 12
-      filename: testdata/ruby/sending_data_in_category_to_third_party.rb
+      filename: integration/policies/testdata/ruby/sending_data_in_category_to_third_party.rb
       category_groups:
-        - PHI
         - PII
       parent_line_number: 10
       parent_content: |-
@@ -14,12 +14,12 @@ high:
           level: "info"
         )
       omit_parent: false
-    - policy_name: Third-party data category exposure
-      policy_description: Sending data in category to third party. Ensure data sent to third party is intended and secured.
+    - policy_name: Do not leak sensitive data to third-party loggers.
+      policy_display_id: CR-016
+      policy_description: 'Sensitive data should not be sent to third party logging libraries or services. This policy checks if sensitive data types are sent to third party loggers. Currently supports: Sentry. '
       line_number: 18
-      filename: testdata/ruby/sending_data_in_category_to_third_party.rb
+      filename: integration/policies/testdata/ruby/sending_data_in_category_to_third_party.rb
       category_groups:
-        - PHI
         - PII
       parent_line_number: 16
       parent_content: |-
@@ -30,12 +30,12 @@ high:
           end
         end
       omit_parent: false
-    - policy_name: Third-party data category exposure
-      policy_description: Sending data in category to third party. Ensure data sent to third party is intended and secured.
+    - policy_name: Do not leak sensitive data to third-party loggers.
+      policy_display_id: CR-016
+      policy_description: 'Sensitive data should not be sent to third party logging libraries or services. This policy checks if sensitive data types are sent to third party loggers. Currently supports: Sentry. '
       line_number: 24
-      filename: testdata/ruby/sending_data_in_category_to_third_party.rb
+      filename: integration/policies/testdata/ruby/sending_data_in_category_to_third_party.rb
       category_groups:
-        - PHI
         - PII
       parent_line_number: 24
       parent_content: 'Sentry.set_user(email: user.email)'

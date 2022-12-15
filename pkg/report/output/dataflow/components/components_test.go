@@ -79,8 +79,8 @@ func TestDataflowComponents(t *testing.T) {
 		},
 		{
 			Name: "multiple detections - deterministic output",
-			FileContent: `{	"detector_type": "ruby", "type": "interface_classified", "source": {"filename": "billing.rb", "line_number": 2}, "classification": { "Decision": { "state": "valid" }, "recipe_name": "Stripe", "recipe_match": true}}
-{"detector_type": "gemfile-lock", "type": "dependency_classified", "source": {"filename": "Gemfile.lock", "line_number": 258}, "classification": { "Decision": { "state": "valid" }, "recipe_name": "Stripe", "recipe_match": true}}`,
+			FileContent: `{	"detector_type": "ruby", "type": "interface_classified", "source": {"filename": "billing.rb", "line_number": 2}, "classification": { "Decision": { "state": "valid" }, "recipe_name": "Stripe", "recipe_uuid": "123-abc", "recipe_match": true}}
+{"detector_type": "gemfile-lock", "type": "dependency_classified", "source": {"filename": "Gemfile.lock", "line_number": 258}, "classification": { "Decision": { "state": "valid" }, "recipe_name": "Stripe", "recipe_uuid": "123-abc", "recipe_match": true}}`,
 			Want: []types.Component{
 				{
 					Name: "Stripe",
@@ -118,7 +118,7 @@ func TestDataflowComponents(t *testing.T) {
 
 			detections, err := detectors.GetOutput(globaltypes.Report{
 				Path: file.Name(),
-			})
+			}, settings.Config{})
 			if err != nil {
 				t.Fatalf("failed to get detectors output %s", err)
 				return

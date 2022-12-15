@@ -4,10 +4,11 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/bearer/curio/pkg/commands/process/settings"
@@ -21,6 +22,7 @@ import (
 	parserdatatype "github.com/bearer/curio/pkg/parser/datatype"
 	"github.com/bearer/curio/pkg/report/detections"
 	schemadatatype "github.com/bearer/curio/pkg/report/schema/datatype"
+	"github.com/bearer/curio/pkg/report/source"
 	"github.com/bearer/curio/pkg/util/file"
 	pluralize "github.com/gertd/go-pluralize"
 	"golang.org/x/exp/slices"
@@ -124,7 +126,7 @@ func (detector *Detector) ProcessFile(file *file.FileInfo, dir *file.Path, repor
 			if err != nil {
 				return false, err
 			}
-			fileBytes, err := ioutil.ReadAll(f)
+			fileBytes, err := io.ReadAll(f)
 			if err != nil {
 				return false, err
 			}
@@ -272,7 +274,11 @@ func (detector *Detector) extractData(captures []parser.Captures, rule config.Co
 		forExport := make(map[parser.NodeID]*schemadatatype.DataType)
 		var parent schemadatatype.DataTypable
 
-		if filtersMatch := matchFilters(capture, rule); !filtersMatch {
+		if filtersMatch := shouldIgnoreCaptures(capture, rule); filtersMatch {
+			continue
+		}
+
+		if filtersMatch := shouldMatchCaptures(capture, rule); !filtersMatch {
 			continue
 		}
 
@@ -374,13 +380,20 @@ func (detector *Detector) extractData(captures []parser.Captures, rule config.Co
 			content.Text = &rule.Pattern
 
 			var parent *schema.Parent
+			var parentSource source.Source
 			if !rule.OmitParent {
-				parentSource := capture["rule"].Source(true)
+				parentSource = capture["rule"].Source(true)
 				parent = &schema.Parent{
 					LineNumber: *parentSource.LineNumber,
 					Content:    *parentSource.Text,
 				}
+			} else {
+				parentSource = capture["rule"].Source(false)
+				parent = &schema.Parent{
+					LineNumber: *parentSource.LineNumber,
+				}
 			}
+
 			report.AddDetection(detections.TypeCustomRisk, detectors.Type(rule.RuleName), content, parent)
 
 			continue
@@ -400,18 +413,62 @@ func (detector *Detector) extractData(captures []parser.Captures, rule config.Co
 	return nil
 }
 
-func matchFilters(captures parser.Captures, rule config.CompiledRule) bool {
+func shouldMatchCaptures(captures parser.Captures, rule config.CompiledRule) bool {
+	hasMatchViolationParam := false
 	for _, filter := range rule.Filters {
 		param := rule.GetParamByPatternName(filter.Variable)
 		matchNode := captures[param.BuildFullName()]
 		content := matchNode.Content()
 
-		if !slices.Contains(filter.Values, content) {
-			return false
+		if !filter.MatchViolation {
+			continue
+		}
+		hasMatchViolationParam = true
+
+		if filter.Minimum != nil {
+			contentCast, err := strconv.Atoi(content)
+			if err != nil {
+				return false
+			}
+
+			if *filter.Minimum > contentCast {
+				return true
+			}
+		}
+
+		if filter.Maximum != nil {
+			contentCast, err := strconv.Atoi(content)
+			if err != nil {
+				return false
+			}
+
+			if *filter.Maximum < contentCast {
+				return true
+			}
 		}
 	}
 
-	return true
+	if hasMatchViolationParam {
+		return false
+	} else {
+		return true
+	}
+}
+
+func shouldIgnoreCaptures(captures parser.Captures, rule config.CompiledRule) bool {
+	for _, filter := range rule.Filters {
+		param := rule.GetParamByPatternName(filter.Variable)
+		matchNode := captures[param.BuildFullName()]
+		content := matchNode.Content()
+
+		if len(filter.Values) > 0 {
+			if !slices.Contains(filter.Values, content) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (detector *Detector) applyDatatypeTransformations(rule config.CompiledRule, datatypes map[parser.NodeID]*schemadatatype.DataType) {

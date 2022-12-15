@@ -73,6 +73,7 @@ func (worker *Worker) Start() {
 
 	worker.FileList, err = filelist.Discover(worker.task.Definition.Dir, worker.config)
 	if err != nil {
+		worker.process.kill()
 		worker.complete(err)
 		return
 	}
@@ -80,7 +81,7 @@ func (worker *Worker) Start() {
 	if !worker.config.Scan.Quiet {
 		output.StdErrLogger().Msgf("Scanning target %s", worker.config.Scan.Target)
 	}
-	bar := output.GetProgressBar(len(worker.FileList), worker.config)
+	bar := output.GetProgressBar(len(worker.FileList), worker.config, "files")
 
 	reportFile, err := os.Create(worker.task.Definition.FilePath)
 	if err != nil {

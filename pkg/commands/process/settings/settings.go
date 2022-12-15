@@ -33,6 +33,7 @@ type Modules []*PolicyModule
 type Policy struct {
 	Query       string      `mapstructure:"query" json:"query" yaml:"query"`
 	Id          string      `mapstructure:"id" json:"id" yaml:"id"`
+	DisplayId   string      `mapstructure:"display_id" json:"display_id" yaml:"display_id"`
 	Name        string      `mapstructure:"name" json:"name" yaml:"name"`
 	Description string      `mapstructure:"description" json:"description" yaml:"description"`
 	Level       PolicyLevel `mapstructure:"level" json:"level" yaml:"level"`
@@ -56,13 +57,16 @@ func (modules Modules) ToRegoModules() (output []rego.Module) {
 }
 
 type PatternFilter struct {
-	Variable string
-	Values   []string
+	Variable       string   `mapstructure:"variable" json:"variable" yaml:"variable"`
+	Values         []string `mapstructure:"values" json:"values" yaml:"values"`
+	Minimum        *int     `mapstructure:"minimum" json:"minimum" yaml:"minimum"`
+	Maximum        *int     `mapstructure:"maximum" json:"maximum" yaml:"maximum"`
+	MatchViolation bool     `mapstructure:"match_violation" json:"match_violation" yaml:"match_violation"`
 }
 
 type RulePattern struct {
-	Pattern string
-	Filters []PatternFilter
+	Pattern string          `mapstructure:"pattern" json:"pattern" yaml:"pattern"`
+	Filters []PatternFilter `mapstructure:"filters" json:"filters" yaml:"filters"`
 }
 
 type Rule struct {
@@ -70,7 +74,6 @@ type Rule struct {
 	Type           string        `mapstructure:"type" json:"type" yaml:"type"`
 	Languages      []string      `mapstructure:"languages" json:"languages" yaml:"languages"`
 	ParamParenting bool          `mapstructure:"param_parenting" json:"param_parenting" yaml:"param_parenting"`
-	Processors     []Processor   `mapstructure:"processors" json:"processors" yaml:"processors"`
 	Patterns       []RulePattern `mapstructure:"patterns" json:"patterns" yaml:"patterns"`
 
 	RootSingularize bool `mapstructure:"root_singularize" yaml:"root_singularize" `
@@ -119,21 +122,6 @@ func FromOptions(opts flag.Options) (Config, error) {
 		rules = DefaultCustomDetector()
 	}
 
-	for _, customDetector := range rules {
-		for _, processor := range customDetector.Processors {
-			for _, module := range processor.Modules {
-				if module.Path != "" {
-					content, err := processorsFs.ReadFile(module.Path)
-					if err != nil {
-						return Config{}, err
-					}
-					module.Content = string(content)
-					module.Path = ""
-				}
-			}
-		}
-	}
-
 	var policies map[string]*Policy
 	if viper.IsSet(PoliciesKey) {
 		err := viper.UnmarshalKey(PoliciesKey, &policies)
@@ -147,12 +135,12 @@ func FromOptions(opts flag.Options) (Config, error) {
 	for key := range policies {
 		policy := policies[key]
 
-		if len(opts.PolicyOptions.OnlyPolicy) > 0 && !opts.PolicyOptions.OnlyPolicy[policy.Id] {
+		if len(opts.PolicyOptions.OnlyPolicy) > 0 && !opts.PolicyOptions.OnlyPolicy[policy.DisplayId] {
 			delete(policies, key)
 			continue
 		}
 
-		if opts.PolicyOptions.SkipPolicy[policy.Id] {
+		if opts.PolicyOptions.SkipPolicy[policy.DisplayId] {
 			delete(policies, key)
 			continue
 		}
@@ -212,4 +200,13 @@ func DefaultPolicies() map[string]*Policy {
 	}
 
 	return policies
+}
+
+func EncryptedVerifiedRegoModuleText() (string, error) {
+	data, err := processorsFs.ReadFile("processors/encrypted_verified.rego")
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
 }

@@ -28,19 +28,19 @@ var (
 		Name:       "disable-domain-resolution",
 		ConfigName: "scan.disable-domain-resolution",
 		Value:      true,
-		Usage:      "Do not attempt to resolve detected domains during classification (default false), e.g. --disable-domain-resolution=true",
+		Usage:      "Do not attempt to resolve detected domains during classification",
 	}
 	DomainResolutionTimeoutFlag = Flag{
 		Name:       "domain-resolution-timeout",
 		ConfigName: "scan.domain-resolution-timeout",
 		Value:      3 * time.Second,
-		Usage:      "Set timeout when attempting to resolve detected domains during classification (default 3 seconds), e.g. --domain-resolution-timeout=3s",
+		Usage:      "Set timeout when attempting to resolve detected domains during classification, e.g. --domain-resolution-timeout=3s",
 	}
 	InternalDomainsFlag = Flag{
 		Name:       "internal-domains",
 		ConfigName: "scan.internal-domains",
 		Value:      []string{},
-		Usage:      "Define regular expressions for better classification of private or unreachable domains e.g. --internal-domains=\"*.my-company.com,private.sh\"",
+		Usage:      "Define regular expressions for better classification of private or unreachable domains e.g. --internal-domains=\".*.my-company.com,private.sh\"",
 	}
 	ContextFlag = Flag{
 		Name:       "context",
@@ -54,6 +54,12 @@ var (
 		Value:      false,
 		Usage:      "Suppress non-essential messages",
 	}
+	ForceFlag = Flag{
+		Name:       "force",
+		ConfigName: "scan.force",
+		Value:      false,
+		Usage:      "Disable the cache and runs the detections again",
+	}
 )
 
 type ScanFlagGroup struct {
@@ -64,6 +70,7 @@ type ScanFlagGroup struct {
 	InternalDomainsFlag         *Flag
 	ContextFlag                 *Flag
 	QuietFlag                   *Flag
+	ForceFlag                   *Flag
 }
 
 type ScanOptions struct {
@@ -75,6 +82,7 @@ type ScanOptions struct {
 	InternalDomains         []string      `mapstructure:"internal-domains" json:"internal-domains" yaml:"internal-domains"`
 	Context                 Context       `mapstructure:"context" json:"context" yaml:"context"`
 	Quiet                   bool          `mapstructure:"quiet" json:"quiet" yaml:"quiet"`
+	Force                   bool          `mapstructure:"force" json:"force" yaml:"force"`
 }
 
 func NewScanFlagGroup() *ScanFlagGroup {
@@ -86,6 +94,7 @@ func NewScanFlagGroup() *ScanFlagGroup {
 		InternalDomainsFlag:         &InternalDomainsFlag,
 		ContextFlag:                 &ContextFlag,
 		QuietFlag:                   &QuietFlag,
+		ForceFlag:                   &ForceFlag,
 	}
 }
 
@@ -102,6 +111,7 @@ func (f *ScanFlagGroup) Flags() []*Flag {
 		f.InternalDomainsFlag,
 		f.ContextFlag,
 		f.QuietFlag,
+		f.ForceFlag,
 	}
 }
 
@@ -119,6 +129,7 @@ func (f *ScanFlagGroup) ToOptions(args []string) (ScanOptions, error) {
 		InternalDomains:         getStringSlice(f.InternalDomainsFlag),
 		Context:                 getContext(f.ContextFlag),
 		Quiet:                   getBool(f.QuietFlag),
+		Force:                   getBool(f.ForceFlag),
 		Target:                  target,
 	}, nil
 }

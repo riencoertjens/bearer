@@ -1,20 +1,34 @@
 medium:
-    - policy_name: Insecure SMTP
-      policy_description: Communication using insecure SMTP in an application processing sensitive data. Verify that SMTP settings use OpenSSL or equivalent.
+    - policy_name: Only communicate with secure SMTP connections.
+      policy_display_id: CR-010
+      policy_description: Secure connections using SMTP help prevent unauthorized actors from viewing transmitted data. This policy checks if SMTP mailer settings are set to only allow secure connections.
       line_number: 8
-      filename: testdata/ruby/insecure_smtp.rb
+      filename: integration/policies/testdata/ruby/insecure_smtp.rb
       category_groups:
-        - PHI
         - PII
-      omit_parent: true
-    - policy_name: Insecure SMTP
-      policy_description: Communication using insecure SMTP in an application processing sensitive data. Verify that SMTP settings use OpenSSL or equivalent.
+      parent_line_number: 8
+      parent_content: |
+        Rails.application.configure do
+          config.action_mailer.smtp_settings = {
+            openssl_verify_mode: OpenSSL::SSL::VERIFY_NONE
+          }
+        end
+      omit_parent: false
+    - policy_name: Only communicate with secure SMTP connections.
+      policy_display_id: CR-010
+      policy_description: Secure connections using SMTP help prevent unauthorized actors from viewing transmitted data. This policy checks if SMTP mailer settings are set to only allow secure connections.
       line_number: 14
-      filename: testdata/ruby/insecure_smtp.rb
+      filename: integration/policies/testdata/ruby/insecure_smtp.rb
       category_groups:
-        - PHI
         - PII
-      omit_parent: true
+      parent_line_number: 14
+      parent_content: |
+        Rails.application.configure do
+          config.action_mailer.smtp_settings = {
+            openssl_verify_mode: "none"
+          }
+        end
+      omit_parent: false
 
 
 --

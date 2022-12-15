@@ -3,10 +3,13 @@ package policies
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bearer/curio/pkg/classification/db"
 	"github.com/bearer/curio/pkg/commands/process/settings"
+	"github.com/bearer/curio/pkg/util/file"
+	"github.com/bearer/curio/pkg/util/output"
 	"github.com/bearer/curio/pkg/util/rego"
 	"github.com/fatih/color"
 	"golang.org/x/exp/maps"
@@ -40,6 +43,7 @@ type PolicyOutput struct {
 
 type PolicyResult struct {
 	PolicyName        string   `json:"policy_name" yaml:"policy_name"`
+	PolicyDisplayId   string   `json:"policy_display_id" yaml:"policy_display_id"`
 	PolicyDescription string   `json:"policy_description" yaml:"policy_description"`
 	LineNumber        int      `json:"line_number,omitempty" yaml:"line_number,omitempty"`
 	Filename          string   `json:"filename,omitempty" yaml:"filename,omitempty"`
@@ -53,13 +57,28 @@ func GetOutput(dataflow *dataflow.DataFlow, config settings.Config) (map[string]
 	// policy results grouped by severity (critical, high, ...)
 	result := make(map[string][]PolicyResult)
 
-	for _, policy := range config.Policies {
+	// Ensure a deterministic order
+	keys := maps.Keys(config.Policies)
+	if !config.Scan.Quiet {
+		output.StdErrLogger().Msgf("Evaluating policies")
+	}
+	bar := output.GetProgressBar(len(keys), config, "policies")
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		err := bar.Add(1)
+		if err != nil {
+			output.StdErrLogger().Msgf("Policy %s failed to write progress bar %e", key, err)
+		}
+
+		policy := config.Policies[key]
+
 		// Create a prepared query that can be evaluated.
 		rs, err := rego.RunQuery(policy.Query,
 			PolicyInput{
 				PolicyId:       policy.Id,
 				Dataflow:       dataflow,
-				DataCategories: db.Default().DataCategories,
+				DataCategories: db.DefaultWithContext(config.Scan.Context).DataCategories,
 			},
 			policy.Modules.ToRegoModules())
 		if err != nil {
@@ -78,10 +97,11 @@ func GetOutput(dataflow *dataflow.DataFlow, config settings.Config) (map[string]
 				return nil, err
 			}
 
-			for _, policyOutput := range policyResults["policy_breach"] {
+			for _, policyOutput := range policyResults["policy_failure"] {
 				policyResult := PolicyResult{
 					PolicyName:        policy.Name,
 					PolicyDescription: policy.Description,
+					PolicyDisplayId:   policy.DisplayId,
 					Filename:          policyOutput.Filename,
 					LineNumber:        policyOutput.LineNumber,
 					CategoryGroups:    policyOutput.CategoryGroups,
@@ -110,7 +130,7 @@ func BuildReportString(policyResults map[string][]PolicyResult, policies map[str
 
 	writePolicyListToString(reportStr, policies)
 
-	breachedPolicies := map[string]map[string]bool{
+	policyFailures := map[string]map[string]bool{
 		settings.LevelCritical: make(map[string]bool),
 		settings.LevelHigh:     make(map[string]bool),
 		settings.LevelMedium:   make(map[string]bool),
@@ -123,13 +143,13 @@ func BuildReportString(policyResults map[string][]PolicyResult, policies map[str
 		settings.LevelMedium,
 		settings.LevelLow,
 	} {
-		for _, policyBreach := range policyResults[policyLevel] {
-			breachedPolicies[policyLevel][policyBreach.PolicyName] = true
-			writePolicyBreachToString(reportStr, policyBreach, policyLevel)
+		for _, policyFailure := range policyResults[policyLevel] {
+			policyFailures[policyLevel][policyFailure.PolicyDisplayId] = true
+			writePolicyFailureToString(reportStr, policyFailure, policyLevel)
 		}
 	}
 
-	writeSummaryToString(reportStr, policyResults, len(policies), breachedPolicies)
+	writeSummaryToString(reportStr, policyResults, len(policies), policyFailures)
 
 	color.NoColor = initialColorSetting
 
@@ -138,17 +158,21 @@ func BuildReportString(policyResults map[string][]PolicyResult, policies map[str
 
 func writePolicyListToString(reportStr *strings.Builder, policies map[string]*settings.Policy) {
 	// list policies that were run
-	reportStr.WriteString("\nPolicy list: \n\n")
+	reportStr.WriteString("\nPolicy checks: \n\n")
+	policyList := []string{}
 	for key := range policies {
 		policy := policies[key]
-		reportStr.WriteString(color.HiBlackString("- " + policy.Name + "\n"))
+		policyList = append(policyList, color.HiBlackString("- "+policy.Name+" ["+policy.DisplayId+"]\n"))
 	}
+
+	sort.Strings(policyList)
+	reportStr.WriteString(strings.Join(policyList, ""))
 }
 
 func writeSummaryToString(
 	reportStr *strings.Builder,
 	policyResults map[string][]PolicyResult,
-	policyCount int, breachedPolicies map[string]map[string]bool,
+	policyCount int, policyFailures map[string]map[string]bool,
 ) {
 	reportStr.WriteString("\n=====================================")
 
@@ -156,7 +180,7 @@ func writeSummaryToString(
 	if len(policyResults) == 0 {
 		reportStr.WriteString("\n\n")
 		reportStr.WriteString(color.HiGreenString("SUCCESS\n\n"))
-		reportStr.WriteString(fmt.Sprint(policyCount) + " policies were run and no breaches were detected.\n\n")
+		reportStr.WriteString(fmt.Sprint(policyCount) + " policies were run and no failures were detected.\n\n")
 		return
 	}
 
@@ -168,45 +192,50 @@ func writeSummaryToString(
 	totalCount := criticalCount + highCount + mediumCount + lowCount
 
 	reportStr.WriteString("\n\n")
-	reportStr.WriteString(color.RedString("Policy breaches detected\n\n"))
-	reportStr.WriteString(fmt.Sprint(policyCount) + " policies were run ")
-	reportStr.WriteString("and " + fmt.Sprint(totalCount) + " breaches were detected.\n\n")
+	reportStr.WriteString(color.RedString(fmt.Sprint(policyCount) + " policies, " + fmt.Sprint(totalCount) + " failures\n\n"))
 
 	// critical count
 	reportStr.WriteString(formatSeverity(settings.LevelCritical) + fmt.Sprint(criticalCount))
-	if len(breachedPolicies[settings.LevelCritical]) > 0 {
-		reportStr.WriteString(" (" + strings.Join(maps.Keys(breachedPolicies[settings.LevelCritical]), ", ") + ")")
+	if len(policyFailures[settings.LevelCritical]) > 0 {
+		policyIds := maps.Keys(policyFailures[settings.LevelCritical])
+		sort.Strings(policyIds)
+		reportStr.WriteString(" (" + strings.Join(policyIds, ", ") + ")")
 	}
 	// high count
 	reportStr.WriteString("\n" + formatSeverity(settings.LevelHigh) + fmt.Sprint(highCount))
-	if len(breachedPolicies[settings.LevelHigh]) > 0 {
-		reportStr.WriteString(" (" + strings.Join(maps.Keys(breachedPolicies[settings.LevelHigh]), ", ") + ")")
+	if len(policyFailures[settings.LevelHigh]) > 0 {
+		policyIds := maps.Keys(policyFailures[settings.LevelHigh])
+		sort.Strings(policyIds)
+		reportStr.WriteString(" (" + strings.Join(policyIds, ", ") + ")")
 	}
 	// medium count
 	reportStr.WriteString("\n" + formatSeverity(settings.LevelMedium) + fmt.Sprint(mediumCount))
-	if len(breachedPolicies[settings.LevelMedium]) > 0 {
-		reportStr.WriteString(" (" + strings.Join(maps.Keys(breachedPolicies[settings.LevelMedium]), ", ") + ")")
+	if len(policyFailures[settings.LevelMedium]) > 0 {
+		policyIds := maps.Keys(policyFailures[settings.LevelMedium])
+		sort.Strings(policyIds)
+		reportStr.WriteString(" (" + strings.Join(policyIds, ", ") + ")")
 	}
 	// low count
 	reportStr.WriteString("\n" + formatSeverity(settings.LevelLow) + fmt.Sprint(lowCount))
-	if len(breachedPolicies[settings.LevelLow]) > 0 {
-		reportStr.WriteString(" (" + strings.Join(maps.Keys(breachedPolicies[settings.LevelLow]), ", ") + ")")
+	if len(policyFailures[settings.LevelLow]) > 0 {
+		policyIds := maps.Keys(policyFailures[settings.LevelLow])
+		sort.Strings(policyIds)
+		reportStr.WriteString(" (" + strings.Join(policyIds, ", ") + ")")
 	}
 
-	reportStr.WriteString("\n\n")
+	reportStr.WriteString("\n")
 }
 
-func writePolicyBreachToString(reportStr *strings.Builder, policyBreach PolicyResult, policySeverity string) {
+func writePolicyFailureToString(reportStr *strings.Builder, policyFailure PolicyResult, policySeverity string) {
 	reportStr.WriteString("\n\n")
 	reportStr.WriteString(formatSeverity(policySeverity))
-	reportStr.WriteString(policyBreach.PolicyName + " policy breach with " + strings.Join(policyBreach.CategoryGroups, ", ") + "\n")
-	reportStr.WriteString(color.HiBlackString(policyBreach.PolicyDescription + "\n"))
+	reportStr.WriteString(policyFailure.PolicyName + " [" + policyFailure.PolicyDisplayId + "]" + "\n")
+	reportStr.WriteString(color.HiBlackString("https://curio.sh/reference/policies/#" + policyFailure.PolicyDisplayId + "\n"))
 	reportStr.WriteString("\n")
-	reportStr.WriteString(color.HiBlueString("File: " + underline(policyBreach.Filename+":"+fmt.Sprint(policyBreach.LineNumber)) + "\n"))
-	if !policyBreach.OmitParent {
-		reportStr.WriteString("\n")
-		reportStr.WriteString(highlightCodeExtract(policyBreach.LineNumber, policyBreach.ParentLineNumber, policyBreach.ParentContent))
-	}
+	reportStr.WriteString(color.HiBlueString("File: " + underline(policyFailure.Filename+":"+fmt.Sprint(policyFailure.LineNumber)) + "\n"))
+
+	reportStr.WriteString("\n")
+	reportStr.WriteString(highlightCodeExtract(policyFailure.Filename, policyFailure.LineNumber, policyFailure.ParentLineNumber, policyFailure.ParentContent))
 }
 
 func formatSeverity(policySeverity string) string {
@@ -217,10 +246,18 @@ func formatSeverity(policySeverity string) string {
 	return severityColorFn(strings.ToUpper(policySeverity + ": "))
 }
 
-func highlightCodeExtract(lineNumber int, extractStartLineNumber int, extract string) string {
+func highlightCodeExtract(fileName string, lineNumber int, extractStartLineNumber int, extract string) string {
 	result := ""
 	targetIndex := lineNumber - extractStartLineNumber
 	for index, line := range strings.Split(extract, "\n") {
+		if index == 0 {
+			var err error
+			line, err = file.ReadFileSingleLine(fileName, extractStartLineNumber)
+			if err != nil {
+				break
+			}
+		}
+
 		if index == targetIndex {
 			result += color.MagentaString(" " + fmt.Sprint(extractStartLineNumber+index) + " ")
 			result += color.MagentaString(line) + "\n"

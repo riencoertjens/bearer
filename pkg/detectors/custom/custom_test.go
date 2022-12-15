@@ -26,6 +26,9 @@ var configRubyLoggers []byte
 //go:embed testdata/config/rails_sessions.yml
 var configRailsSessions []byte
 
+//go:embed testdata/config/ruby_password_length.yml
+var configPasswordLength []byte
+
 //go:embed testdata/config/rails_encrypts.yml
 var configRailsEncrypts []byte
 
@@ -34,6 +37,9 @@ var configSQLCreateFunction []byte
 
 //go:embed testdata/config/sql_create_table.yml
 var configSQLCreateTable []byte
+
+//go:embed testdata/config/sql_create_table_mysql.yml
+var configSQLCreateTableMySQL []byte
 
 //go:embed testdata/config/sql_create_trigger.yml
 var configSQLCreateTrigger []byte
@@ -49,6 +55,21 @@ var configInsecureFTP []byte
 
 //go:embed testdata/config/ruby_third_party_data_send.yml
 var configRubyThirdPartyDataSend []byte
+
+func TestRubyPasswordLengthClassMinMax(t *testing.T) {
+	result := runTest(configPasswordLength, filepath.Join("testdata", "ruby", "password_length", "class_min_max"), t)
+	cupaloy.SnapshotT(t, result)
+}
+
+func TestRubyPasswordLengthClass(t *testing.T) {
+	result := runTest(configPasswordLength, filepath.Join("testdata", "ruby", "password_length", "class"), t)
+	cupaloy.SnapshotT(t, result)
+}
+
+func TestRubyPasswordLengthIteration(t *testing.T) {
+	result := runTest(configPasswordLength, filepath.Join("testdata", "ruby", "password_length", "iteration"), t)
+	cupaloy.SnapshotT(t, result)
+}
 
 func TestRailsSessionsCallJSON(t *testing.T) {
 	result := runTest(configRailsSessions, filepath.Join("testdata", "ruby", "sessions", "call"), t)
@@ -91,6 +112,10 @@ func TestSQLCreateFunctionJSON(t *testing.T) {
 }
 func TestSQLCreateTableJSON(t *testing.T) {
 	result := runTest(configSQLCreateTable, filepath.Join("testdata", "sql", "create_table"), t)
+	cupaloy.SnapshotT(t, result)
+}
+func TestSQLCreateTableMySQLJSON(t *testing.T) {
+	result := runTest(configSQLCreateTableMySQL, filepath.Join("testdata", "sql", "create_table_mysql"), t)
 	cupaloy.SnapshotT(t, result)
 }
 

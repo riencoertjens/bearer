@@ -5,7 +5,7 @@ layout: layouts/doc.njk
 
 # Quick Start
 
-Scan your first project in X minutes or less.
+Discover data security risks and vulnerabilities in only a few minutes. In this guide you will install Curio, run a scan on a local project, and view the results of a [policy report](/explanations/reports/#policy-report). Let's get started!
 
 ## Installation
 
@@ -13,7 +13,7 @@ Curio is available as a standalone executable binary. The latest release is avai
 
 ### Install Script
 
-:warning: **Not working till public** :warning:
+:warning: **Not working until public**: Use the [Binary](#binary) instructions in the next section :warning:
 
 This script downloads the Curio binary automatically based on your OS and architecture.
 
@@ -39,18 +39,56 @@ chmod +x ./curio
 
 ## Scan your project
 
-Run `curio scan` on a project directory:
+The easiest way to try out Curio is with our example project, [Bear Publishing](https://github.com/Bearer/bear-publishing). It simulates a realistic Ruby application with common data security flaws. Clone or download it to a convenient location to get started.  
 
 ```bash
-curio scan /path/to/your_project
+git clone https://github.com/Bearer/bear-publishing.git
 ```
 
-or a single a file:
+Now, run the scan command with `curio scan` on the project directory:
 
 ```bash
-curio scan ./curio-ci-test/Pipfile.lock
+curio scan bear-publishing
 ```
 
-<!-- TODO: insert sample output or video here -->
+A progress bar will display the status of the scan.
 
-Additional options for using and configuring the `scan` command can be found in the [scan documentation](/reference/commands/#scan).
+Once the scan is complete, Curio will output a policy report with details of any policy failures, as well as where in the codebase the infractions happened.
+
+## Analyze the report
+
+The policy report is an easily digestible view of the data security problems detected by Curio. A report is made up of:
+
+- The list of [policies](/reference/policies/) run against your code.
+- Each detected failure, containing the file location and lines that triggered the policy failure.
+- A summary of the report with the stats for passing and failing policies.
+
+The [Bear Publishing](https://github.com/Bearer/bear-publishing) example application will trigger policy failures and output a full report. Here's a section of the output containing a failure snippet and the final summary:
+
+```text
+
+HIGH: Application level encryption missing policy failure with PHI, PII
+Application level encryption missing. Enable application level encryption to reduce the risk of leaking sensitive data.
+
+File: /bear-publishing/db/schema.rb:22
+
+ 14 create_table "authors", force: :cascade do |t|
+ 15     t.string "name"
+ 16     t.datetime "created_at", null: false
+ 17     t.datetime "updated_at", null: false
+ 18   end
+
+=====================================
+
+Policy failures detected
+
+14 policies were run and 12 failures were detected.
+
+CRITICAL: 0
+HIGH: 10 (Application level encryption missing, Insecure HTTP with Data Category,
+          JWT leaking, Logger leaking, Cookie leaking, Third-party data category exposure)
+MEDIUM: 2 (Insecure SMTP, Insecure FTP)
+LOW: 0
+```
+
+The policy report is just one report type available in Curio. Additional options for using and configuring the `scan` command can be found in the [scan documentation](/reference/commands/#scan). For additional guides and usage tips, [view the docs](https://curio.sh).
