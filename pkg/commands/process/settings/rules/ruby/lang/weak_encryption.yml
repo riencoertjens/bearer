@@ -1,5 +1,10 @@
 patterns:
   - pattern: |
+      OpenSSL::PKey::RSA.new($<LENGTH>)
+    filters:
+      - variable: LENGTH
+        less_than: 2048
+  - pattern: |
       Digest::SHA1.hexidigest()
   - pattern: |
       Digest::MD5.hexdigest()
