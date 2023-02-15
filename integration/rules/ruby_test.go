@@ -104,6 +104,11 @@ func TestRubyRailsSessionSummary(t *testing.T) {
 	runRulesTest("ruby/rails/session", "summary", "ruby_rails_session", t)
 }
 
+func TestRubyRailsSessionKeyUsingUserInput(t *testing.T) {
+	t.Parallel()
+	runRulesTest("ruby/rails/session_key_using_user_input", "summary", "ruby_rails_session_key_using_user_input", t)
+}
+
 func TestRubyThirdPartiesAlgoliaSummary(t *testing.T) {
 	t.Parallel()
 	runRulesTest("ruby/third_parties/algolia", "summary", "ruby_third_parties_algolia", t)
