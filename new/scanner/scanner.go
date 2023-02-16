@@ -3,8 +3,8 @@ package scanner
 import (
 	"fmt"
 
-	"github.com/bearer/curio/new/detector/composition/javascript"
 	"github.com/bearer/curio/new/detector/composition"
+	"github.com/bearer/curio/new/detector/composition/javascript"
 	"github.com/bearer/curio/new/detector/composition/ruby"
 	"github.com/bearer/curio/new/detector/types"
 	"github.com/bearer/curio/pkg/classification"
@@ -30,7 +30,7 @@ func (scanner scannerType) Close() {
 
 func Setup(config *settings.Config, classifier *classification.Classifier) (err error) {
 	var toInstantiate = []struct {
-		constructor func(map[string]*settings.Rule, *classification.Classifier) (types.Composition, error)
+		constructor func(map[string][]types.Detector, *classification.Classifier) (types.Composition, error)
 		name        string
 	}{
 		{
@@ -43,8 +43,13 @@ func Setup(config *settings.Config, classifier *classification.Classifier) (err 
 		},
 	}
 
+	ruleDetectors, err := composition.CompileRules(config)
+	if err != nil {
+		return err
+	}
+
 	for _, instantiatior := range toInstantiate {
-		composition, err := instantiatior.constructor(config.Rules, classifier)
+		composition, err := instantiatior.constructor(ruleDetectors, classifier)
 		if err != nil {
 			return fmt.Errorf("failed to instantiate composition %s:%s", instantiatior.name, err)
 		}

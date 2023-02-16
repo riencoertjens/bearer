@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bearer/curio/new/detector/composition"
 	"github.com/bearer/curio/new/detector/types"
 	"github.com/bearer/curio/pkg/classification"
 	"github.com/bearer/curio/pkg/commands/process/settings"
@@ -19,7 +20,7 @@ import (
 func RunTest(t *testing.T,
 	rules map[string][]byte,
 	testCasesPath string,
-	compositionInstantiator func(map[string]*settings.Rule, *classification.Classifier) (types.Composition, error)) {
+	compositionInstantiator func(map[string][]types.Detector, *classification.Classifier) (types.Composition, error)) {
 	rulesConfig := make(map[string]*settings.Rule)
 
 	for ruleName, ruleContent := range rules {
@@ -44,7 +45,12 @@ func RunTest(t *testing.T,
 		t.Fatal(err)
 	}
 
-	composition, err := compositionInstantiator(rulesConfig, classifier)
+	ruleDetectors, err := composition.CompileRulesInternal(rulesConfig, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	composition, err := compositionInstantiator(ruleDetectors, classifier)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,10 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"golang.org/x/exp/slices"
-
 	"github.com/bearer/curio/new/detector/evaluator"
-	"github.com/bearer/curio/new/detector/implementation/custom"
 	"github.com/bearer/curio/new/detector/implementation/generic/datatype"
 	"github.com/bearer/curio/new/detector/implementation/generic/insecureurl"
 	"github.com/bearer/curio/new/detector/implementation/ruby/object"
@@ -15,7 +12,6 @@ import (
 	"github.com/bearer/curio/new/language"
 
 	"github.com/bearer/curio/pkg/classification"
-	"github.com/bearer/curio/pkg/commands/process/settings"
 	"github.com/bearer/curio/pkg/util/file"
 
 	stringdetector "github.com/bearer/curio/new/detector/implementation/ruby/string"
@@ -31,7 +27,10 @@ type Composition struct {
 	closers             []func()
 }
 
-func New(rules map[string]*settings.Rule, classifier *classification.Classifier) (detectortypes.Composition, error) {
+func New(
+	ruleDetectors map[string][]detectortypes.Detector,
+	classifier *classification.Classifier,
+) (detectortypes.Composition, error) {
 	lang, err := language.Get("ruby")
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup language: %s", err)
@@ -83,23 +82,8 @@ func New(rules map[string]*settings.Rule, classifier *classification.Classifier)
 	detectors = append(detectors, detector)
 	composition.closers = append(composition.closers, detector.Close)
 
-	// instantiate custom ruby detectors
-	for ruleName, rule := range rules {
-		if !slices.Contains(rule.Languages, "ruby") {
-			continue
-		}
-
-		composition.customDetectorTypes = append(composition.customDetectorTypes, ruleName)
-
-		customDetector, err := custom.New(
-			lang,
-			ruleName,
-			rule.Patterns,
-		)
-		if err != nil {
-			composition.Close()
-			return nil, fmt.Errorf("failed to create rule %s: %s", ruleName, err)
-		}
+	for _, customDetector := range ruleDetectors["ruby"] {
+		composition.customDetectorTypes = append(composition.customDetectorTypes, customDetector.Name())
 		detectors = append(detectors, customDetector)
 		composition.closers = append(composition.closers, customDetector.Close)
 	}
