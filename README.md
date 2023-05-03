@@ -68,7 +68,8 @@ curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.s
   Update an existing installation with the following:
 
   ```bash
-  brew update && brew update bearer/tap/bearer
+  
+  brew upgrade && brew upgrade bearer/tap/bearer
   ```
 
 </details>
